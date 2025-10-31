@@ -9,9 +9,7 @@ from datetime import datetime
 from typing import List
 
 import streamlit as st
-import google.generativeai as genai
 from agno.agent import Agent
-from agno.models.google import Gemini
 from agno.tools.exa import ExaTools
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -19,37 +17,42 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_core.embeddings import Embeddings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain.embeddings.base import Embeddings
+from langchain_openai import AzureChatOpenAI
 
 # --- Constants ---
 COLLECTION_NAME = "basic-gemini-rag1"
 
-# --- Custom Embedder using Gemini API ---
-class GeminiEmbedder(Embeddings):
-    """Wrapper around Gemini embedding model to conform with LangChain's Embeddings interface."""
-    
-    def __init__(self, model_name="models/text-embedding-004"):
-        if st.session_state.google_api_key:
-            os.environ["GOOGLE_API_KEY"] = st.session_state.google_api_key
-        genai.configure(api_key=st.session_state.google_api_key)
-        self.model = model_name
+# --- Custom Embedder using OpenAI API ---
+class OpenAIEmbedder(Embeddings):
+    """Wrapper around Azure OpenAI Embedding model to conform with LangChain's Embeddings interface."""
+
+    def __init__(self, 
+                 deployment_name="text-embedding-ada-002",   # <-- Azure deployment name
+                 api_version="2023-05-15"
+                 ):
+        
+        os.environ["AZURE_OPENAI_API_KEY"] = st.session_state.azure_openai_api_key
+        os.environ["AZURE_OPENAI_ENDPOINT"] = st.session_state.azure_openai_endpoint
+
+        self.embedder = AzureOpenAIEmbeddings(
+            azure_deployment=deployment_name,
+            api_version=api_version
+        )
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [self.embed_query(text) for text in texts]
+        return self.embedder.embed_documents(texts)
 
     def embed_query(self, text: str) -> List[float]:
-        response = genai.embed_content(
-            model=self.model,
-            content=text,
-            task_type="retrieval_document"
-        )
-        return response['embedding']
+        return self.embedder.embed_query(text)
 
 # --- Streamlit UI ---
 st.title("🔍 Basic RAG with Gemini & Qdrant")
 
 # --- Session State Initialization ---
 default_keys = {
-    'google_api_key': "",
+    'azure_openai_api_key': "",
     'qdrant_api_key': "",
     'qdrant_url': "",
     'vector_store': None,
@@ -63,7 +66,7 @@ for k, v in default_keys.items():
 
 # --- Sidebar for API Key Input ---
 st.sidebar.header("API Keys")
-st.session_state.google_api_key = st.sidebar.text_input("Google API Key", type="password")
+st.session_state.azure_openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 st.session_state.qdrant_api_key = st.sidebar.text_input("Qdrant API Key", type="password")
 st.session_state.qdrant_url = st.sidebar.text_input("Qdrant URL", placeholder="https://your-cluster.cloud.qdrant.io:6333")
 
@@ -131,7 +134,7 @@ def create_vector_store(client, texts):
         vector_store = QdrantVectorStore(
             client=client,
             collection_name=COLLECTION_NAME,
-            embedding=GeminiEmbedder()
+            embedding=OpenAIEmbedder()
         )
 
         with st.spinner('Uploading documents to Qdrant...'):
@@ -155,6 +158,34 @@ def get_rag_agent() -> Agent:
         - Be precise and cite specific details
         
         Always maintain high accuracy and clarity in your responses.
+        """,
+        show_tool_calls=True,
+        markdown=True,
+    )
+
+# --- RAG Agent ---
+def get_rag_agent() -> Agent:
+    """Initialize the RAG Agent using Azure OpenAI Chat."""
+
+    os.environ["AZURE_OPENAI_API_KEY"] = st.session_state.azure_openai_api_key
+    os.environ["AZURE_OPENAI_ENDPOINT"] = st.session_state.azure_openai_endpoint
+
+    llm = AzureChatOpenAI(
+        azure_deployment=st.session_state.azure_openai_model_deployment,  # e.g., "gpt-4o-mini", "gpt-35-turbo"
+        api_version="2023-05-15",  # use the version your Azure resource uses
+        temperature=0,             # recommended for RAG
+    )
+
+    return Agent(
+        name="Azure OpenAI RAG Agent",
+        model=llm,
+        instructions="""
+        You are an Intelligent RAG Agent that provides highly accurate answers based on supplied document context.
+
+        Behaviors:
+        - If document context is provided, answer strictly from it.
+        - If unsure, say "I could not find this in the provided documents."
+        - Be concise and precise.
         """,
         show_tool_calls=True,
         markdown=True,
