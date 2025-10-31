@@ -1,5 +1,5 @@
 # ===========================================
-# STEP 1: Basic RAG System with Gemini + Qdrant
+# STEP 1: Basic RAG System with OpenAI + Qdrant
 # ===========================================
 
 # --- Imports ---
@@ -22,7 +22,7 @@ from langchain.embeddings.base import Embeddings
 from langchain_openai import AzureChatOpenAI
 
 # --- Constants ---
-COLLECTION_NAME = "basic-gemini-rag1"
+COLLECTION_NAME = "basic-openai-rag1"
 
 # --- Custom Embedder using OpenAI API ---
 class OpenAIEmbedder(Embeddings):
@@ -48,7 +48,7 @@ class OpenAIEmbedder(Embeddings):
         return self.embedder.embed_query(text)
 
 # --- Streamlit UI ---
-st.title("🔍 Basic RAG with Gemini & Qdrant")
+st.title("🔍 Basic RAG with OpenAI & Qdrant")
 
 # --- Session State Initialization ---
 default_keys = {
@@ -147,10 +147,15 @@ def create_vector_store(client, texts):
 
 # --- RAG Agent ---
 def get_rag_agent() -> Agent:
-    """Initialize the RAG agent with Gemini."""
+    """Initialize the RAG agent with OpenAI."""
+    llm = AzureChatOpenAI(
+        azure_deployment=st.session_state.azure_openai_model_deployment,  # e.g., "gpt-4o-mini", "gpt-35-turbo"
+        api_version="2023-05-15",  # use the version your Azure resource uses
+        temperature=0,             # recommended for RAG
+    )
     return Agent(
-        name="Gemini RAG Agent",
-        model=Gemini(id="gemini-2.0-flash-thinking-exp-01-21"),
+        name="OpenAI RAG Agent",
+        model=llm,
         instructions="""You are an Intelligent Agent specializing in providing accurate answers.
         
         When given context from documents:
@@ -158,34 +163,6 @@ def get_rag_agent() -> Agent:
         - Be precise and cite specific details
         
         Always maintain high accuracy and clarity in your responses.
-        """,
-        show_tool_calls=True,
-        markdown=True,
-    )
-
-# --- RAG Agent ---
-def get_rag_agent() -> Agent:
-    """Initialize the RAG Agent using Azure OpenAI Chat."""
-
-    os.environ["AZURE_OPENAI_API_KEY"] = st.session_state.azure_openai_api_key
-    os.environ["AZURE_OPENAI_ENDPOINT"] = st.session_state.azure_openai_endpoint
-
-    llm = AzureChatOpenAI(
-        azure_deployment=st.session_state.azure_openai_model_deployment,  # e.g., "gpt-4o-mini", "gpt-35-turbo"
-        api_version="2023-05-15",  # use the version your Azure resource uses
-        temperature=0,             # recommended for RAG
-    )
-
-    return Agent(
-        name="Azure OpenAI RAG Agent",
-        model=llm,
-        instructions="""
-        You are an Intelligent RAG Agent that provides highly accurate answers based on supplied document context.
-
-        Behaviors:
-        - If document context is provided, answer strictly from it.
-        - If unsure, say "I could not find this in the provided documents."
-        - Be concise and precise.
         """,
         show_tool_calls=True,
         markdown=True,
