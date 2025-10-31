@@ -16,7 +16,7 @@ This repository contains a **Streamlit**-based **Retrieval-Augmented Generation 
 
 | File | Description |
 |:-----|:------------|
-| `basic_rag.py` | Basic RAG system using OpenAI Embedding (`models/text-embedding-004`), OpenAI LLM (`gemini-2.0-flash-thinking-exp-01-21`), and Qdrant Cloud as the vector database. |
+| `basic_rag.py` | Basic RAG system using OpenAI Embedding (`models/text-embedding-004`), OpenAI LLM (`gpt4o`), and Qdrant Cloud as the vector database. |
 | `agentic_rag.py` | Extends `basic_rag.py` by adding a **Query Rewriter Agent** powered by **Agno AI**, improving retrieval relevance. |
 | `agentic_rag.py` | Extends `basic_rag.py` by adding a **Exa Search Tool** again powered by **Agno AI** to search content over web in case not available in RAG |
 | `requirements.txt` | Python dependencies list to install all necessary packages. |
@@ -65,7 +65,7 @@ This repository contains a **Streamlit**-based **Retrieval-Augmented Generation 
 ## 🔑 How to Get API Keys
 
 ### 1. OpenAI API Key
-- Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
+- Go to [Open AI](https://platform.openai.com/api-keys).
 - Sign in with your OpenAI account.
 - Create a new API key for accessing OpenAI models.
 
@@ -97,7 +97,7 @@ In this project, **Streamlit** powers the user interface for:
 - **Streamlit**: Web UI
 - **OpenAI Generative AI (OpenAI)**: 
   - Embedding model: `models/text-embedding-004`
-  - LLM model: `gemini-2.0-flash-thinking-exp-01-21`
+  - LLM model: `gpt4o`
 - **Qdrant Cloud**: Vector Database
 - **LangChain**: PDF loading, chunking, and integration with Qdrant
 - **Agno AI**: 
