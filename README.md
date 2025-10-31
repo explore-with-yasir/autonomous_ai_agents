@@ -6,7 +6,7 @@
 # 🧠 Streamlit RAG Application (with Query Rewriter Agent)
 
 This repository contains a **Streamlit**-based **Retrieval-Augmented Generation (RAG)** application built with:
-- **Google's OpenAI LLMs**
+- **OpenAI's LLMs**
 - **Qdrant Cloud** (for vector storage and retrieval)
 - **Agno AI Agents** (for query rewriting)
 - **LangChain** (for document loading and chunking)
@@ -19,7 +19,7 @@ This repository contains a **Streamlit**-based **Retrieval-Augmented Generation 
 
 | File | Description |
 |:-----|:------------|
-| `basic_rag.py` | Basic RAG system using Google Embedding (`models/text-embedding-004`), OpenAI LLM (`gemini-2.0-flash-thinking-exp-01-21`), and Qdrant Cloud as the vector database. |
+| `basic_rag.py` | Basic RAG system using OpenAI Embedding (`models/text-embedding-004`), OpenAI LLM (`gemini-2.0-flash-thinking-exp-01-21`), and Qdrant Cloud as the vector database. |
 | `agentic_rag.py` | Extends `basic_rag.py` by adding a **Query Rewriter Agent** powered by **Agno AI**, improving retrieval relevance. |
 | `agentic_rag.py` | Extends `basic_rag.py` by adding a **Exa Search Tool** again powered by **Agno AI** to search content over web in case not available in RAG |
 | `requirements.txt` | Python dependencies list to install all necessary packages. |
@@ -47,7 +47,7 @@ This repository contains a **Streamlit**-based **Retrieval-Augmented Generation 
 
 4. **Create a `.env` file** in the root directory and add the following API keys:
     ```env
-    GOOGLE_API_KEY=your-google-api-key
+    AZURE_OPENAI_API_KEY=your-openai-api-key
     QDRANT_API_KEY=your-qdrant-api-key
     QDRANT_URL=https://your-qdrant-cloud-instance-url
     EXA_API_KEY=your-exa-api-key  # Required only for basic_rag_with_rewriter.py
@@ -69,7 +69,7 @@ This repository contains a **Streamlit**-based **Retrieval-Augmented Generation 
 
 ### 1. OpenAI API Key
 - Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
-- Sign in with your Google account.
+- Sign in with your OpenAI account.
 - Create a new API key for accessing OpenAI models.
 
 ### 2. Qdrant Cloud API Key
@@ -98,7 +98,7 @@ In this project, **Streamlit** powers the user interface for:
 ## ⚙️ Libraries and Technologies Used
 
 - **Streamlit**: Web UI
-- **Google Generative AI (OpenAI)**: 
+- **OpenAI Generative AI (OpenAI)**: 
   - Embedding model: `models/text-embedding-004`
   - LLM model: `gemini-2.0-flash-thinking-exp-01-21`
 - **Qdrant Cloud**: Vector Database
@@ -116,9 +116,7 @@ from datetime import datetime
 from typing import List
 
 import streamlit as st
-import google.generativeai as genai
 from agno.agent import Agent
-from agno.models.google import Gemini
 from agno.tools.exa import ExaTools
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -135,7 +133,7 @@ from qdrant_client.models import Distance, VectorParams
 - 📄 Currently **only PDF uploads** are supported for ingestion.
 - 🛠️ Qdrant vectors are indexed using **Cosine Distance**.
 - 🚀 The agentic version (`basic_rag_with_rewriter.py`) improves queries using web search context when necessary.
-- ⚡ The application uses **Google Embedding** model for document chunk embeddings and **Gemini-2.0-Flash** model for answering.
+- ⚡ The application uses **OpenAI Embedding** model for document chunk embeddings and **GPT4o** model for answering.
 
 ---
 
