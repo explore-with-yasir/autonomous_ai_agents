@@ -4,10 +4,8 @@ from datetime import datetime
 from typing import List
 
 import streamlit as st
-import google.generativeai as genai
 import bs4
 from agno.agent import Agent
-from agno.models.google import Gemini
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_qdrant import QdrantVectorStore
@@ -15,35 +13,45 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 from langchain_core.embeddings import Embeddings
 from agno.tools.exa import ExaTools
+from langchain_openai import AzureOpenAIEmbeddings
+from langchain.embeddings.base import Embeddings
+from langchain_openai import AzureChatOpenAI
 
 
-class GeminiEmbedder(Embeddings):
-    def __init__(self, model_name="models/text-embedding-004"):
-        genai.configure(api_key=st.session_state.google_api_key)
-        self.model = model_name
+# --- Custom Embedder using OpenAI API ---
+class OpenAIEmbedder(Embeddings):
+    """Wrapper around Azure OpenAI Embedding model to conform with LangChain's Embeddings interface."""
+
+    def __init__(self, 
+                 deployment_name="text-embedding-ada-002",   # <-- Azure deployment name
+                 api_version="2023-05-15"
+                 ):
+        
+        os.environ["AZURE_OPENAI_API_KEY"] = st.session_state.azure_openai_api_key
+        os.environ["AZURE_OPENAI_ENDPOINT"] = st.session_state.azure_openai_endpoint
+
+        self.embedder = AzureOpenAIEmbeddings(
+            azure_deployment=deployment_name,
+            api_version=api_version
+        )
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        return [self.embed_query(text) for text in texts]
+        return self.embedder.embed_documents(texts)
 
     def embed_query(self, text: str) -> List[float]:
-        response = genai.embed_content(
-            model=self.model,
-            content=text,
-            task_type="retrieval_document"
-        )
-        return response['embedding']
+        return self.embedder.embed_query(text)
 
 
 # Constants
-COLLECTION_NAME = "gemini-thinking-agent-agno"
+COLLECTION_NAME = "thinking-agent-agno"
 
 
 # Streamlit App Initialization
-st.title("🤔 Agentic RAG with Gemini Thinking and Agno")
+st.title("🤔 Agentic RAG with OpenAI Thinking and Agno")
 
 # Session State Initialization
-if 'google_api_key' not in st.session_state:
-    st.session_state.google_api_key = ""
+if 'openai_api_key' not in st.session_state:
+    st.session_state.openai_api_key = ""
 if 'qdrant_api_key' not in st.session_state:
     st.session_state.qdrant_api_key = ""
 if 'qdrant_url' not in st.session_state:
@@ -66,7 +74,7 @@ if 'similarity_threshold' not in st.session_state:
 
 # Sidebar Configuration
 st.sidebar.header("🔑 API Configuration")
-google_api_key = st.sidebar.text_input("Google API Key", type="password", value=st.session_state.google_api_key)
+openai_api_key = st.sidebar.text_input("OpenAI API Key", type="password", value=st.session_state.openai_api_key)
 qdrant_api_key = st.sidebar.text_input("Qdrant API Key", type="password", value=st.session_state.qdrant_api_key)
 qdrant_url = st.sidebar.text_input("Qdrant URL", 
                                  placeholder="https://your-cluster.cloud.qdrant.io:6333",
@@ -78,7 +86,7 @@ if st.sidebar.button("🗑️ Clear Chat History"):
     st.rerun()
 
 # Update session state
-st.session_state.google_api_key = google_api_key
+st.session_state.openai_api_key = openai_api_key
 st.session_state.qdrant_api_key = qdrant_api_key
 st.session_state.qdrant_url = qdrant_url
 
@@ -198,7 +206,7 @@ def create_vector_store(client, texts):
             client.create_collection(
                 collection_name=COLLECTION_NAME,
                 vectors_config=VectorParams(
-                    size=768,  # Gemini embedding-004 dimension
+                    size=768,  # OpenAI embedding-004 dimension
                     distance=Distance.COSINE
                 )
             )
@@ -211,7 +219,7 @@ def create_vector_store(client, texts):
         vector_store = QdrantVectorStore(
             client=client,
             collection_name=COLLECTION_NAME,
-            embedding=GeminiEmbedder()
+            embedding=OpenAIEmbedder()
         )
         
         # Add documents
@@ -225,12 +233,17 @@ def create_vector_store(client, texts):
         return None
 
 
-# Add this after the GeminiEmbedder class
+# Add this after the OpenAIEmbedder class
 def get_query_rewriter_agent() -> Agent:
     """Initialize a query rewriting agent."""
+    llm = AzureChatOpenAI(
+        azure_deployment=st.session_state.azure_openai_model_deployment,  # e.g., "gpt-4o-mini", "gpt-35-turbo"
+        api_version="2023-05-15",  # use the version your Azure resource uses
+        temperature=0,             # recommended for RAG
+    )
     return Agent(
         name="Query Rewriter",
-        model=Gemini(id="gemini-2.0-flash-thinking-exp-01-21"),
+        model=llm,
         instructions="""You are an expert at reformulating questions to be more precise and detailed. 
         Your task is to:
         1. Analyze the user's question
@@ -253,9 +266,14 @@ def get_query_rewriter_agent() -> Agent:
 
 def get_web_search_agent() -> Agent:
     """Initialize a web search agent."""
+    llm = AzureChatOpenAI(
+        azure_deployment=st.session_state.azure_openai_model_deployment,  # e.g., "gpt-4o-mini", "gpt-35-turbo"
+        api_version="2023-05-15",  # use the version your Azure resource uses
+        temperature=0,             # recommended for RAG
+    )
     return Agent(
         name="Web Search Agent",
-        model=Gemini(id="gemini-2.0-flash-thinking-exp-01-21"),
+        model=llm,
         tools=[ExaTools(
             api_key=st.session_state.exa_api_key,
             include_domains=search_domains,
@@ -269,24 +287,32 @@ def get_web_search_agent() -> Agent:
         show_tool_calls=True,
         markdown=True,
     )
+    
 
 
+# --- RAG Agent ---
 def get_rag_agent() -> Agent:
-    """Initialize the main RAG agent."""
+    """Initialize the RAG Agent using Azure OpenAI Chat."""
+
+    os.environ["AZURE_OPENAI_API_KEY"] = st.session_state.azure_openai_api_key
+    os.environ["AZURE_OPENAI_ENDPOINT"] = st.session_state.azure_openai_endpoint
+
+    llm = AzureChatOpenAI(
+        azure_deployment=st.session_state.azure_openai_model_deployment,  # e.g., "gpt-4o-mini", "gpt-35-turbo"
+        api_version="2023-05-15",  # use the version your Azure resource uses
+        temperature=0,             # recommended for RAG
+    )
+
     return Agent(
-        name="Gemini RAG Agent",
-        model=Gemini(id="gemini-2.0-flash-thinking-exp-01-21"),
-        instructions="""You are an Intelligent Agent specializing in providing accurate answers.
-        
-        When given context from documents:
-        - Focus on information from the provided documents
-        - Be precise and cite specific details
-        
-        When given web search results:
-        - Clearly indicate that the information comes from web search
-        - Synthesize the information clearly
-        
-        Always maintain high accuracy and clarity in your responses.
+        name="Azure OpenAI RAG Agent",
+        model=llm,
+        instructions="""
+        You are an Intelligent RAG Agent that provides highly accurate answers based on supplied document context.
+
+        Behaviors:
+        - If document context is provided, answer strictly from it.
+        - If unsure, say "I could not find this in the provided documents."
+        - Be concise and precise.
         """,
         show_tool_calls=True,
         markdown=True,
@@ -317,9 +343,9 @@ def check_document_relevance(query: str, vector_store, threshold: float = 0.7) -
 
 
 # Main Application Flow
-if st.session_state.google_api_key:
-    os.environ["GOOGLE_API_KEY"] = st.session_state.google_api_key
-    genai.configure(api_key=st.session_state.google_api_key)
+if st.session_state.openai_api_key:
+    os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
+    genai.configure(api_key=st.session_state.openai_api_key)
     
     qdrant_client = init_qdrant()
     
@@ -470,4 +496,4 @@ Please provide a comprehensive answer based on the available information."""
                 st.error(f"❌ Error generating response: {str(e)}")
 
 else:
-    st.warning("⚠️ Please enter your Google API Key to continue")
+    st.warning("⚠️ Please enter your OpenAI API Key to continue")
